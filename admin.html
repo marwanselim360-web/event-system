@@ -1,0 +1,478 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>1EventApp — Admin Studio Dual Engine</title>
+  
+  <!-- مكتبات مستقرة وسريعة للمتصفح -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- مكتبة QR حديثة وبتستوعب أي حجم نصوص بدون Overflow نهائياً -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+  <style>
+    :root {
+      --primary: #d4af37;
+      --bg: #0d0f12;
+      --card-bg: #161a1e;
+      --border: #282f37;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --vip-gold: #f59e0b;
+      --wa-green: #22c55e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 24px; }
+    .container { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+    .header { text-align: center; border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+    .header h1 { font-size: 26px; color: var(--primary); margin-bottom: 6px; }
+    
+    /* Tabs Navigation */
+    .tabs-nav {
+      display: flex;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 14px 18px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text-muted);
+      font-weight: 700;
+      font-size: 15px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+    }
+    .tab-btn.active { color: #000; border-color: transparent; }
+    .tab-btn.tab-regular.active { background: var(--wa-green); }
+    .tab-btn.tab-vip.active { background: var(--vip-gold); }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+    .card h3 { font-size: 17px; margin-bottom: 16px; color: var(--primary); border-bottom: 1px dashed var(--border); padding-bottom: 8px; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; }
+    select, input[type="text"], input[type="file"], input[type="color"] {
+      width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: #0b0d0f; color: var(--text); outline: none;
+    }
+    input[type="color"] { height: 42px; padding: 2px; cursor: pointer; }
+    
+    .btn {
+      width: 100%; padding: 13px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 14px;
+    }
+    .btn-regular { background: var(--wa-green); color: #000; }
+    .btn-vip { background: var(--vip-gold); color: #000; }
+    .btn:disabled { background: var(--border) !important; color: var(--text-muted) !important; cursor: not-allowed; }
+    
+    .preview-box { display: flex; justify-content: center; align-items: center; padding: 16px; background: #000; border-radius: 8px; border: 1px dashed var(--border); }
+    canvas { max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+    
+    .progress-bar { width: 100%; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-top: 10px; display: none; }
+    .progress-fill { height: 100%; width: 0%; transition: width 0.1s; }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .badge-info { font-size: 12px; color: var(--text-muted); margin-top: 6px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>1EventApp — Admin Studio</h1>
+    <p style="color: var(--text-muted); font-size: 14px;">نظام توليد وإدارة تذاكر الدخول المشفرة (Offline Engine)</p>
+  </div>
+
+  <!-- نظام التبويبين -->
+  <div class="tabs-nav">
+    <button class="tab-btn tab-regular active" onclick="switchTab('regular')">
+      <span>💬 1. المعازيم العادية (واتساب أوتوماتيك)</span>
+    </button>
+    <button class="tab-btn tab-vip" onclick="switchTab('vip')">
+      <span>👑 2. كروت الـ VIP (تسليم خاص للـ Planner)</span>
+    </button>
+  </div>
+
+  <div class="grid">
+    <!-- إعدادات الحدث والتصميم -->
+    <div class="card">
+      <h3>إعدادات الحدث والتصميم</h3>
+      <div class="form-group">
+        <label>نوع الإيفنت:</label>
+        <select id="eventType">
+          <option value="wedding">زفاف / فرح (Wedding & VIP Tables)</option>
+          <option value="concert">حفلة غنائية (Concert / Gates & Categories)</option>
+          <option value="corporate">مؤتمر / شركات (Corporate Badges)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>اسم الحدث:</label>
+        <input type="text" id="eventName" value="Wedding of Marwan & Sara">
+      </div>
+      <div class="form-group">
+        <label>صورة الخلفية (من الـ Wedding Planner):</label>
+        <input type="file" id="bgInput" accept="image/*">
+      </div>
+      <div class="form-group">
+        <label>لون نصوص العنوان والزون:</label>
+        <input type="color" id="themeColor" value="#9b7e28">
+      </div>
+      <div class="form-group">
+        <label>لون اسم الضيف:</label>
+        <input type="color" id="guestNameColor" value="#111827">
+      </div>
+    </div>
+
+    <!-- التبويب الأول: شيت المعازيم العادية -->
+    <div id="regularTab" class="card tab-content active">
+      <h3 style="color: var(--wa-green);">بيانات المعازيم العادية (Excel بالأرقام)</h3>
+      <div class="form-group">
+        <label>شيت الإكسيل (يحتوي على: الاسم، الموبايل، الطاولة):</label>
+        <input type="file" id="regularExcelInput" accept=".xlsx, .xls, .csv">
+      </div>
+      <p id="regularStatus" style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">لم يتم رفع شيت المعازيم العادية بعد.</p>
+      
+      <button class="btn btn-regular" id="generateRegularBtn" disabled>توليد وتجهيز تذاكر الواتساب (ZIP)</button>
+      <div class="progress-bar" id="regularProgressBar">
+        <div class="progress-fill" id="regularProgressFill" style="background: var(--wa-green);"></div>
+      </div>
+      <p class="badge-info">⚡ الصور الناتجة تُحفظ داخل مجلد باسم الحدث لتنظيم الإرسال تلقائياً.</p>
+    </div>
+
+    <!-- التبويب الثاني: شيت كروت الـ VIP -->
+    <div id="vipTab" class="card tab-content">
+      <h3 style="color: var(--vip-gold);">كروت الـ VIP المخصصة (بدون أرقام)</h3>
+      <div class="form-group">
+        <label>شيت شخصيات الـ VIP (الاسم، الطاولة فقط):</label>
+        <input type="file" id="vipExcelInput" accept=".xlsx, .xls, .csv">
+      </div>
+      <p id="vipStatus" style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">لم يتم رفع شيت الـ VIP بعد.</p>
+      
+      <button class="btn btn-vip" id="generateVipBtn" disabled>تصدير حزمة الـ VIP الكاملة للـ Planner (ZIP)</button>
+      <div class="progress-bar" id="vipProgressBar">
+        <div class="progress-fill" id="vipProgressFill" style="background: var(--vip-gold);"></div>
+      </div>
+      <p class="badge-info">⭐ يُصدّر كروت الصور بالإضافة لشيت إكسيل منظم بأكواد كل شخصية VIP لتسليمه للـ Planner.</p>
+    </div>
+
+    <!-- المعاينة الحية للكارت -->
+    <div class="card" style="grid-column: 1 / -1;">
+      <h3>معاينة كارت التذكرة الحي</h3>
+      <div class="preview-box">
+        <canvas id="ticketCanvas" width="600" height="900"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let regularGuests = [];
+  let vipGuests = [];
+  let activeTab = 'regular';
+  let customBgImage = null;
+
+  const canvas = document.getElementById('ticketCanvas');
+  const ctx = canvas.getContext('2d');
+
+  function switchTab(tab) {
+    activeTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    
+    if (tab === 'regular') {
+      document.querySelector('.tab-regular').classList.add('active');
+      document.getElementById('regularTab').classList.add('active');
+      if (regularGuests.length > 0) renderPreview(regularGuests[0]);
+      else renderPreview();
+    } else {
+      document.querySelector('.tab-vip').classList.add('active');
+      document.getElementById('vipTab').classList.add('active');
+      if (vipGuests.length > 0) renderPreview(vipGuests[0]);
+      else renderPreview({ name: "معالي المستشار فلان الفلاني", table: "VIP Table 01", zone: "VIP Lounge" });
+    }
+  }
+
+  function createQRImage(text, size = 250) {
+    return new Promise((resolve) => {
+      try {
+        const qr = qrcode(0, 'L');
+        qr.addData(text);
+        qr.make();
+
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.src = qr.createDataURL(4, 0);
+      } catch (err) {
+        console.error("QR Generation Error:", err);
+        resolve(null);
+      }
+    });
+  }
+
+  async function renderPreview(guest = null) {
+    const themeColor = document.getElementById('themeColor').value;
+    const guestColor = document.getElementById('guestNameColor').value;
+    const eventName = document.getElementById('eventName').value;
+
+    const currentGuest = guest || (activeTab === 'vip' 
+      ? { name: "معالي المستشار فلان الفلاني", table: "VIP Table 01", zone: "VIP Lounge" }
+      : { name: "أحمد مصطفى", table: "طاولة 12", zone: "General" });
+
+    // 1. رسم الخلفية
+    if (customBgImage) {
+      ctx.drawImage(customBgImage, 0, 0, canvas.width, canvas.height);
+    } else {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = themeColor;
+      ctx.lineWidth = 4;
+      ctx.strokeRect(20, 20, canvas.width - 40, canvas.height - 40);
+    }
+
+    // 2. اسم الحدث
+    ctx.textAlign = "center";
+    ctx.fillStyle = themeColor;
+    ctx.font = "bold 28px 'Segoe UI', Tahoma";
+    ctx.fillText(eventName, canvas.width / 2, 95);
+
+    // 3. اسم الضيف
+    ctx.fillStyle = guestColor;
+    ctx.font = "bold 32px 'Segoe UI', Tahoma";
+    ctx.fillText(currentGuest.name, canvas.width / 2, 220);
+
+    // 4. التفاصيل
+    ctx.fillStyle = themeColor;
+    ctx.font = "bold 22px 'Segoe UI', Tahoma";
+    ctx.fillText(`${currentGuest.zone}  •  ${currentGuest.table}`, canvas.width / 2, 270);
+
+    // 5. خلفية الـ QR
+    const qrSize = 250;
+    const qrX = (canvas.width - qrSize) / 2;
+    const qrY = 370;
+    
+    ctx.fillStyle = "#ffffff";
+    ctx.shadowColor = "rgba(0,0,0,0.18)";
+    ctx.shadowBlur = 14;
+    ctx.fillRect(qrX - 16, qrY - 16, qrSize + 32, qrSize + 32);
+    ctx.shadowBlur = 0;
+
+    ctx.strokeStyle = themeColor;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(qrX - 16, qrY - 16, qrSize + 32, qrSize + 32);
+
+    // 6. تشفير نص الـ QR
+    const qrData = `${currentGuest.token || 'TKN'}|${currentGuest.name}|${currentGuest.table}`;
+
+    const qrImg = await createQRImage(qrData, qrSize);
+    if (qrImg) {
+      ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+    }
+
+    // 7. الفوتر
+    ctx.fillStyle = "#6b7280";
+    ctx.font = "14px 'Segoe UI', Tahoma";
+    ctx.fillText("Powered by 1EventApp — Digital Access", canvas.width / 2, 850);
+  }
+
+  function parseExcel(file, callback) {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const data = new Uint8Array(event.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(sheet);
+      callback(json);
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  // شيت المعازيم العادية
+  document.getElementById('regularExcelInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    parseExcel(file, (json) => {
+      regularGuests = json.map((row, index) => {
+        const keys = Object.keys(row);
+        const nameKey = keys.find(k => /name|الاسم|ضيف|customer|عميل/i.test(k)) || keys[0];
+        const tableKey = keys.find(k => /table|طاولة|ترابيزة|gate|بوابة|seat|مقعد/i.test(k)) || keys[1];
+        const phoneKey = keys.find(k => /phone|موبايل|هاتف|تليفون|رقم/i.test(k));
+        const zoneKey = keys.find(k => /zone|زون|فئة|category/i.test(k));
+
+        return {
+          name: String(row[nameKey] || `ضيف ${index+1}`).trim(),
+          phone: phoneKey ? String(row[phoneKey]).trim() : "",
+          table: tableKey ? String(row[tableKey]) : "General Access",
+          zone: zoneKey ? String(row[zoneKey]) : "Regular",
+          token: "REG_" + Math.random().toString(36).substring(2, 8).toUpperCase()
+        };
+      });
+
+      document.getElementById('regularStatus').innerText = `تم استيراد ${regularGuests.length} معزوم عادي بنجاح!`;
+      document.getElementById('regularStatus').style.color = "#4ade80";
+      document.getElementById('generateRegularBtn').disabled = false;
+      renderPreview(regularGuests[0]);
+    });
+  });
+
+  // شيت شخصيات الـ VIP
+  document.getElementById('vipExcelInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    parseExcel(file, (json) => {
+      vipGuests = json.map((row, index) => {
+        const keys = Object.keys(row);
+        const nameKey = keys.find(k => /name|الاسم|ضيف|vip/i.test(k)) || keys[0];
+        const tableKey = keys.find(k => /table|طاولة|ترابيزة/i.test(k)) || keys[1];
+
+        return {
+          name: String(row[nameKey] || `VIP ${index+1}`).trim(),
+          table: tableKey ? String(row[tableKey]) : "VIP Table 01",
+          zone: "VIP Lounge",
+          token: "VIP_" + (index + 1).toString().padStart(3, '0') + "_" + Math.random().toString(36).substring(2, 6).toUpperCase()
+        };
+      });
+
+      document.getElementById('vipStatus').innerText = `تم استيراد ${vipGuests.length} من كبار الزوار (VIP) بنجاح!`;
+      document.getElementById('vipStatus').style.color = "#fbbf24";
+      document.getElementById('generateVipBtn').disabled = false;
+      renderPreview(vipGuests[0]);
+    });
+  });
+
+  const sleepTick = () => new Promise(resolve => requestAnimationFrame(resolve));
+
+  // توليد كروت المعازيم العادية وحفظها داخل فولدر باسم الإيفنت
+  document.getElementById('generateRegularBtn').addEventListener('click', async () => {
+    const zip = new JSZip();
+    const btn = document.getElementById('generateRegularBtn');
+    const pBar = document.getElementById('regularProgressBar');
+    const pFill = document.getElementById('regularProgressFill');
+
+    const rawEventName = document.getElementById('eventName').value.trim() || 'Event';
+    const safeFolderName = rawEventName.replace(/[\/\\:*?"<>|]/g, '_').trim();
+
+    // إنشاء فولدر باسم الحدث جوة ملف الـ ZIP
+    const eventFolder = zip.folder(safeFolderName);
+
+    btn.disabled = true;
+    pBar.style.display = 'block';
+
+    for (let i = 0; i < regularGuests.length; i++) {
+      const guest = regularGuests[i];
+      await renderPreview(guest);
+
+      const dataUrl = canvas.toDataURL("image/png");
+      const base64Data = dataUrl.replace(/^data:image\/png;base64,/, "");
+      
+      const cleanPhone = guest.phone.replace(/[^0-9]/g, '');
+      const safeFileName = cleanPhone ? `${cleanPhone}_Ticket.png` : `${guest.token}_Ticket.png`;
+      
+      // حفظ الصورة داخل الفولدر المخصص للإيفنت
+      eventFolder.file(safeFileName, base64Data, { base64: true });
+
+      pFill.style.width = Math.round(((i + 1) / regularGuests.length) * 100) + "%";
+      await sleepTick();
+    }
+
+    const content = await zip.generateAsync({ type: "blob" });
+    saveAs(content, `${safeFolderName}_Tickets.zip`);
+
+    btn.disabled = false;
+    pBar.style.display = 'none';
+  });
+
+  // توليد حزمة الـ VIP داخل فولدر خاص بالإيفنت
+  document.getElementById('generateVipBtn').addEventListener('click', async () => {
+    const zip = new JSZip();
+    const btn = document.getElementById('generateVipBtn');
+    const pBar = document.getElementById('vipProgressBar');
+    const pFill = document.getElementById('vipProgressFill');
+
+    const rawEventName = document.getElementById('eventName').value.trim() || 'Event';
+    const safeFolderName = rawEventName.replace(/[\/\\:*?"<>|]/g, '_').trim();
+    
+    // إنشاء فولدر باسم الإيفنت وجواه فولدر VIP
+    const eventFolder = zip.folder(safeFolderName);
+    const vipFolder = eventFolder.folder("VIP_Cards");
+
+    btn.disabled = true;
+    pBar.style.display = 'block';
+
+    const plannerSheetData = [];
+
+    for (let i = 0; i < vipGuests.length; i++) {
+      const guest = vipGuests[i];
+      await renderPreview(guest);
+
+      const dataUrl = canvas.toDataURL("image/png");
+      const base64Data = dataUrl.replace(/^data:image\/png;base64,/, "");
+      
+      const safeFileName = `${guest.token}_Ticket.png`;
+      vipFolder.file(safeFileName, base64Data, { base64: true });
+
+      plannerSheetData.push({
+        "اسم الشخصية VIP": guest.name,
+        "رقم ومكان الطاولة": guest.table,
+        "المنطقة (Zone)": guest.zone,
+        "كود التحقق الأمني": guest.token,
+        "اسم ملف الصورة المرفق": safeFileName
+      });
+
+      pFill.style.width = Math.round(((i + 1) / vipGuests.length) * 100) + "%";
+      await sleepTick();
+    }
+
+    const ws = XLSX.utils.json_to_sheet(plannerSheetData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "VIP_Planner_List");
+    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    eventFolder.file("VIP_Planner_List.xlsx", excelBuffer);
+
+    const content = await zip.generateAsync({ type: "blob" });
+    saveAs(content, `${safeFolderName}_VIP_Package.zip`);
+
+    btn.disabled = false;
+    pBar.style.display = 'none';
+  });
+
+  // تفاعل المدخلات المباشر
+  document.getElementById('themeColor').addEventListener('input', () => renderPreview());
+  document.getElementById('guestNameColor').addEventListener('input', () => renderPreview());
+  document.getElementById('eventName').addEventListener('input', () => renderPreview());
+  document.getElementById('eventType').addEventListener('change', () => renderPreview());
+
+  document.getElementById('bgInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          customBgImage = img;
+          renderPreview();
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  window.addEventListener('load', () => {
+    renderPreview();
+  });
+</script>
+
+</body>
+</html>

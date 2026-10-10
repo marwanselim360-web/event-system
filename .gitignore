@@ -1,0 +1,6 @@
+__pycache__/
+tickets/
+node_modules/
+auth_session/
+.env
+cloudflared.exe
